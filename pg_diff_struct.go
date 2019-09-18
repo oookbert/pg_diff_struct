@@ -3,6 +3,9 @@
 */
 package main
 import (
+    "os"
+    "flag"
+    "runtime"
     "database/sql"
     "fmt"
     _"github.com/lib/pq"
@@ -23,28 +26,29 @@ const(
     CMP_UNKNOW       = "未知比对错误"
     CMP_DIFF_FUNC    = "函数不一致"     //21
     CMP_FUNC_NOT_EXIST = "目标函数不存在" //22
+    VERSION = "1.0.0"
 )
-const(
-    host = "localhost"
-    port = 5432
-    user = "postgres"
-    password = "postgres"
-    dbname = "postgres"
-)
+type connstr struct{
+    host     string
+    port     uint64
+    user     string
+    password string
+    dbname   string
+}
 type tblnsp struct{
-    relid   int
+    relid   uint64
     schemaname string
     relname    string
 }
 type tbl struct{
     attname     string
-    atttypid    int
-    attlen      int
-    attnum      int
+    atttypid    uint64
+    attlen      uint64
+    attnum      uint64
     attnotnull  bool
 }
 type proc struct{
-    funcid int
+    funcid uint64
     schemaname string
     funcname   string
     funcvalue  string   //md5 value of function src.
@@ -53,11 +57,37 @@ type proc struct{
 type diffresult struct{
     schemaname string
     relname    string
-    diff       int      // same is 0,not exist 2
+    diff       uint64      // same is 0,not exist 2
+}
+/*
+    全局变量
+*/
+var (
+    src       connstr
+    dst       connstr
+    showVersion bool
+    table       bool
+    function    bool
+)
+func init(){
+    flag.StringVar(&src.host,"srchost","localhost","The source side database hostname, is compared on the source side")
+    flag.Uint64Var(&src.port,"srcport",5432,"Source database listening port")
+    flag.StringVar(&src.user,"srcuser","postgres","Source side database login user")
+    flag.StringVar(&src.password,"srcpasswd","postgres","Source-side database login password")
+    flag.StringVar(&src.dbname,"srcdb","postgres","Source-side database name")
+    flag.StringVar(&dst.host,"dsthost","localhost","The destination side database hostname")
+    flag.Uint64Var(&dst.port,"dstport",5432,"Destination database listening port")
+    flag.StringVar(&dst.user,"dstuser","postgres","Destination side database login user")
+    flag.StringVar(&dst.password,"dstpasswd","postgres","Destination-side database login password")
+    flag.StringVar(&dst.dbname,"dstdb","postgres","Destination-side database name.")
+    flag.BoolVar(&showVersion,"version",false,"show the version of this tool")
+    flag.BoolVar(&table,"table",true,"Comparative table structure")
+    flag.BoolVar(&function,"function",false,"Comparative function structure")
+    flag.Parse()
 }
 func Connect()(*sql.DB){
 
-    psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",host,port,user,password,dbname)
+    psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",src.host,src.port,src.user,src.password,src.dbname)
     db,err := sql.Open("postgres",psqlInfo)
     if err != nil{
         panic(err)
@@ -74,7 +104,7 @@ func Connect()(*sql.DB){
 /*
     带参连接
 */
-func ConnectParams(host string,port int,user string,password string,dbname string)(*sql.DB){
+func ConnectParams(host string,port uint64,user string,password string,dbname string)(*sql.DB){
 
     psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",host,port,user,password,dbname)
     db,err := sql.Open("postgres",psqlInfo)
@@ -140,7 +170,7 @@ func QueryDB(db *sql.DB)([]tblnsp){
     }
     return tblnspslice
 }
-func DiffTbl(tbl1 []tbl,tbl2 []tbl)(int){
+func DiffTbl(tbl1 []tbl,tbl2 []tbl)(uint64){
     var t2 tbl
     if len(tbl1) != len(tbl2){
         return 3                    //字段个数不一致
@@ -182,7 +212,12 @@ func DiffDB(db1 *sql.DB,db2 *sql.DB,tblnspDB1 []tblnsp)([]diffresult){
     }
     return result
 }
-func PrintCSV(src string,srcport int,dst string,dstport int,resultdiff []diffresult){
+func showversion(){
+    fmt.Println("")
+    fmt.Printf("pg_diff_struct %s (%s %s)\n",VERSION,runtime.GOOS,runtime.GOARCH)
+    fmt.Println("")
+}
+func PrintCSV(src string,srcport uint64,dst string,dstport uint64,resultdiff []diffresult){
     if resultdiff != nil{
   //      fmt.Printf("The Different database struct compare result .\n")
         fmt.Printf("源库IP,源库端口,源库模式名,源库表名,,目标库IP,目标库端口,目标库模式名,目标库表名,比对结果\n")
@@ -268,14 +303,21 @@ func QueryDiffProc(db1 *sql.DB,db2 *sql.DB)([]diffresult){
 }
 
 func main(){
+    if showVersion {
+        showversion()
+        os.Exit(0)
+    }
     var resultdiff []diffresult
-    var tblnspDB1 []tblnsp
 
     db1 := Connect()
-    db2 := ConnectParams("192.168.209.13",6432,"postgres","123456","postgres")
-    tblnspDB1 = QueryDB(db1)
-    resultdiff = DiffDB(db1,db2,tblnspDB1)
-    PrintCSV(host,port,"192.168.209.13",6432,resultdiff)
-    resultdiff = QueryDiffProc(db1,db2)
-    PrintCSV(host,port,"192.168.209.13",6432,resultdiff)
+    db2 := ConnectParams(dst.host,dst.port,dst.user,dst.password,dst.dbname)
+    if table {
+        tblnspDB1 := QueryDB(db1)
+        resultdiff = DiffDB(db1,db2,tblnspDB1)
+        PrintCSV(src.host,src.port,dst.host,dst.port,resultdiff)
+    }
+    if function {
+        resultdiff = QueryDiffProc(db1,db2)
+        PrintCSV(src.host,src.port,dst.host,dst.port,resultdiff)
+    }
 }
