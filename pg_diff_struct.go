@@ -268,21 +268,14 @@ func QueryDiffProc(db1 *sql.DB,db2 *sql.DB)([]diffresult){
 }
 
 func main(){
-//    var mm string
     var resultdiff []diffresult
-//    var tblnspDB1 []tblnsp
+    var tblnspDB1 []tblnsp
 
-    db1 := ConnectParams("192.168.209.13",5432,"postgres","123456","postgres")
+    db1 := Connect()
     db2 := ConnectParams("192.168.209.13",6432,"postgres","123456","postgres")
- //   result := db1.QueryRow("select now();")
- //   result.Scan(&mm)
- //   if (LOG_LEVEL >= DEBUG){
- //       fmt.Println("now is :%s",mm)
- //   }
-//    QueryTbl(db1,"public","m1")
-//    tblnspDB1 = QueryDB(db1)
-//    resultdiff = DiffDB(db1,db2,tblnspDB1)
-//    PrintCSV("198.218.35.9",5432,"198.218.35.11",5432,resultdiff)
+    tblnspDB1 = QueryDB(db1)
+    resultdiff = DiffDB(db1,db2,tblnspDB1)
+    PrintCSV(host,port,"192.168.209.13",6432,resultdiff)
     resultdiff = QueryDiffProc(db1,db2)
-    PrintCSV("192.168.209.13",port,"192.168.209.13",6432,resultdiff)
+    PrintCSV(host,port,"192.168.209.13",6432,resultdiff)
 }
