@@ -6,6 +6,7 @@ import (
     "os"
     "flag"
     "runtime"
+    "regexp"
     "database/sql"
     "fmt"
     _"github.com/lib/pq"
@@ -56,7 +57,9 @@ type proc struct{
 }
 type diffresult struct{
     schemaname string
+    mapschemaname string
     relname    string
+    maprelname string
     diff       uint64      // same is 0,not exist 2
 }
 /*
@@ -68,6 +71,9 @@ var (
     showVersion bool
     table       bool
     function    bool
+    useMappingSchema bool
+    mapstr      string
+    mappingschema map[string]string
 )
 func init(){
     flag.StringVar(&src.host,"srchost","localhost","The source side database hostname, is compared on the source side")
@@ -83,7 +89,9 @@ func init(){
     flag.BoolVar(&showVersion,"version",false,"show the version of this tool")
     flag.BoolVar(&table,"table",true,"Comparative table structure")
     flag.BoolVar(&function,"function",false,"Comparative function structure")
+    flag.StringVar(&mapstr,"mapstr","","mapping schema name,such as schema1:schema2 ")
     flag.Parse()
+    mapinit()
 }
 func Connect()(*sql.DB){
 
@@ -193,15 +201,57 @@ func DiffTbl(tbl1 []tbl,tbl2 []tbl)(uint64){
     }
     return 0
 }
+func mapinit(){
+    mappingschema = make(map[string]string)
+     if len(mapstr) > 0 {
+        re := regexp.MustCompile(`(\w+\s*:\s*\w+)+`)
+        mapslice := re.FindAllString(mapstr,-1)
+        if len(mapslice) > 0{
+            re = regexp.MustCompile(`(\w+\s*):(\s*\w+)`)
+            for i:=0;i<len(mapslice);i++{
+                maps := re.FindStringSubmatch(mapslice[i])
+                if len(maps) != 3{
+                    fmt.Printf("parse mapstr error:%s\n",maps)
+                    os.Exit(1)
+                }
+                mappingschema[maps[1]]=maps[2]
+            }
+        }else{
+            fmt.Printf("parse mapstr error:%s\n",mapstr)
+            os.Exit(1)
+        }
+        useMappingSchema = true
+    }else{
+        useMappingSchema = false
+    }
+}
+func getmapschemaname(key string)(value string){
+    if (key == "" || mappingschema == nil){
+        fmt.Println("invalid key or mappingschema")
+        os.Exit(1)
+    }
+    if mappingschema[key] == ""{
+        return key
+    }
+    return mappingschema[key]
+}
 func DiffDB(db1 *sql.DB,db2 *sql.DB,tblnspDB1 []tblnsp)([]diffresult){
     var tbl1,tbl2 []tbl
     var diff diffresult
     var result []diffresult
     for _,t := range tblnspDB1{
         tbl1 = QueryTbl(db1,t.schemaname,t.relname)
-        tbl2 = QueryTbl(db2,t.schemaname,t.relname)
-        diff.schemaname = t.schemaname
-        diff.relname    = t.relname
+        if useMappingSchema{
+           diff.schemaname    = t.schemaname
+           diff.mapschemaname = getmapschemaname(t.schemaname)
+           diff.relname       = t.relname
+           tbl2 = QueryTbl(db2,diff.mapschemaname,t.relname)
+        }else {
+            tbl2 = QueryTbl(db2,t.schemaname,t.relname)
+            diff.schemaname     = t.schemaname
+            diff.mapschemaname  = t.schemaname
+            diff.relname        = t.relname
+        }
         if tbl2 == nil{
            diff.diff = 2
            result = append(result,diff)
@@ -228,34 +278,34 @@ func PrintCSV(src string,srcport uint64,dst string,dstport uint64,resultdiff []d
         switch diff.diff{
         case 0:
             fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_OK)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_OK)
         case 2:
             fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_NOT_EXIST)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_NOT_EXIST)
         case 3:
             fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_DIFF_LEN)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_DIFF_LEN)
         case 4:
              fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_DIFF_ATTNAME)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_DIFF_ATTNAME)
         case 5:
              fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_DIFF_ATTTYPE)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_DIFF_ATTTYPE)
         case 6:
              fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_DIFF_ATTLEN)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_DIFF_ATTLEN)
         case 7:
              fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_DIFF_NOTNULL)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_DIFF_NOTNULL)
         case 21:
              fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_DIFF_FUNC)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_DIFF_FUNC)
         case 22:
              fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_FUNC_NOT_EXIST)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_FUNC_NOT_EXIST)
         default:
              fmt.Printf("%s,%d,%s,%s,,%s,%d,%s,%s,%s\n",
-                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.schemaname,diff.relname,CMP_UNKNOW)
+                        src,srcport,diff.schemaname,diff.relname,dst,dstport,diff.mapschemaname,diff.relname,CMP_UNKNOW)
         }
     }
  //   fmt.Println("比对结果输出完毕")
@@ -274,13 +324,20 @@ func QueryDiffProc(db1 *sql.DB,db2 *sql.DB)([]diffresult){
     defer rows.Close()
     for ;rows.Next();md5value = ""{
         rows.Scan(&result.funcid,&result.schemaname,&result.funcname,&result.funcvalue,&result.funcargtypes)
-        sql = "select md5(pg_get_functiondef(p.oid)) as funcvalue from pg_proc p left join pg_namespace n on n.oid=p.pronamespace where p.proname='"+result.funcname+"' and n.nspname='"+result.schemaname+"' and p.proargtypes='"+result.funcargtypes+"';"
+        if useMappingSchema{
+             diff.mapschemaname = getmapschemaname(result.schemaname)
+             diff.schemaname    = result.schemaname
+             diff.relname       = result.funcname
+        }else{
+             diff.schemaname    = result.schemaname
+             diff.relname       = result.funcname
+             diff.mapschemaname = diff.schemaname
+        }
+        sql = "select md5(pg_get_functiondef(p.oid)) as funcvalue from pg_proc p left join pg_namespace n on n.oid=p.pronamespace where p.proname='"+result.funcname+"' and n.nspname='"+diff.mapschemaname+"' and p.proargtypes='"+result.funcargtypes+"';"
         if (LOG_LEVEL >= DEBUG){
             fmt.Println(sql)
         }
         row := db2.QueryRow(sql)
-        diff.schemaname = result.schemaname
-        diff.relname    = result.funcname
         row.Scan(&md5value)
         if (LOG_LEVEL >= DEBUG){
             fmt.Println("md5value is :",md5value)
@@ -306,6 +363,9 @@ func main(){
     if showVersion {
         showversion()
         os.Exit(0)
+    }
+    if useMappingSchema{
+        mapinit()
     }
     var resultdiff []diffresult
 
