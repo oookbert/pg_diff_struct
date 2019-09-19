@@ -22,6 +22,8 @@ Usage of ./pg_diff_struct:
     	Destination side database login user (default "postgres")
   -function
     	Comparative function structure
+  -mapstr string
+        mapping schema name,such as schema1:schema2 
   -srcdb string
     	Source-side database name (default "postgres")
   -srchost string
