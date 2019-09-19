@@ -364,9 +364,6 @@ func main(){
         showversion()
         os.Exit(0)
     }
-    if useMappingSchema{
-        mapinit()
-    }
     var resultdiff []diffresult
 
     db1 := Connect()
