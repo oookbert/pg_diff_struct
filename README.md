@@ -39,5 +39,23 @@ Usage of ./pg_diff_struct:
   -version
     	show the version of this tool
 
+    sample:
+
+        [host1]$ ./pg_diff_struct -mapstr "public:my my:ma"
+        源库IP,源库端口,源库模式名,源库表名,,目标库IP,目标库端口,目标库模式名,目标库表名,比对结果
+        localhost,5432,ma,qq,,localhost,5432,ma,qq,OK
+        localhost,5432,master,test,,localhost,5432,master,test,OK
+        localhost,5432,meta,config_meta,,localhost,5432,meta,config_meta,OK
+        localhost,5432,meta,database_meta,,localhost,5432,meta,database_meta,OK
+        localhost,5432,meta,os_config_meta,,localhost,5432,meta,os_config_meta,OK
+        localhost,5432,meta,extension_meta,,localhost,5432,meta,extension_meta,OK
+        localhost,5432,my,qq,,localhost,5432,ma,qq,表字段数量不一致
+        localhost,5432,my,mq,,localhost,5432,ma,mq,目标表不存在
+        localhost,5432,public,m,,localhost,5432,my,m,目标表不存在
+        localhost,5432,public,m1,,localhost,5432,my,m1,目标表不存在
+        localhost,5432,public,m2,,localhost,5432,my,m2,目标表不存在
+        localhost,5432,public,qq,,localhost,5432,my,qq,OK
+        localhost,5432,public,tq,,localhost,5432,my,tq,目标表不存在
+
 ```
 

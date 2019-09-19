@@ -163,7 +163,7 @@ func QueryDB(db *sql.DB)([]tblnsp){
     if err != nil{
         panic(err)
     }
-    sql = "select relid,schemaname,relname from pg_stat_user_tables;"
+    sql = "select relid,schemaname,relname from pg_stat_user_tables order by schemaname;"
     rows,err := db.Query(sql)
     if err != nil{
         panic(err)
